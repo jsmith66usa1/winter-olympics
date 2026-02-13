@@ -8,7 +8,7 @@ import HistoryGallery from './components/HistoryGallery';
 import ImageDisplay from './components/ImageDisplay';
 import { verifySportAnswer, getGameIntroMessage, generateSportImage } from './services/geminiService';
 
-// Audio Helpers
+// Audio Helpers for Live API
 function encode(bytes: Uint8Array) {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
@@ -57,16 +57,24 @@ const App: React.FC = () => {
   }, []);
 
   const checkApiKey = async () => {
-    const selected = await (window as any).aistudio.hasSelectedApiKey();
-    setHasKey(selected);
+    try {
+      const selected = await (window as any).aistudio.hasSelectedApiKey();
+      setHasKey(selected);
+    } catch (e) {
+      console.error("Failed to check API key status", e);
+    }
   };
 
   const handleSelectKey = async () => {
-    await (window as any).aistudio.openSelectKey();
-    setHasKey(true); // Assume success per instructions
+    try {
+      await (window as any).aistudio.openSelectKey();
+      // Per instructions, assume success after opening to avoid race conditions
+      setHasKey(true);
+    } catch (e) {
+      console.error("Failed to open key selection dialog", e);
+    }
   };
 
-  // Typewriter effect logic for vocal transcription
   const animateTyping = (text: string) => {
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
     let i = 0;
@@ -213,12 +221,12 @@ const App: React.FC = () => {
       setTimer(30);
     } catch (err: any) {
       if (err.message?.includes("429") || err.message?.includes("quota")) {
-        setError("Personal Quota Exceeded. Please ensure your selected API key is from a project with billing enabled.");
+        setError("Personal Quota Exceeded. Please ensure your project has billing enabled.");
       } else if (err.message?.includes("not found")) {
         setHasKey(false);
-        setError("Selected API key invalid. Please select a valid key.");
+        setError("API key no longer valid. Please re-select your credentials.");
       } else {
-        setError("Event delayed: AI image generation failed.");
+        setError("Challenge Load Failed: The stadium is temporarily closed. Try again.");
       }
       setGameState(GameState.ERROR);
     } finally {
@@ -286,15 +294,22 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-4">
         <div className="max-w-md w-full glass-panel p-10 rounded-3xl text-center space-y-8 animate-frost border-white/5 shadow-2xl">
-          <div className="text-6xl">🎿</div>
-          <h1 className="text-4xl font-heading tracking-widest text-blue-400">OLYMPIC CREDENTIALS</h1>
-          <p className="text-slate-400 leading-relaxed">
-            High-quality image generation requires a personal API key. Please select a key from a project with billing enabled to begin the competition.
-          </p>
+          <div className="text-6xl animate-bounce">🎿</div>
+          <h1 className="text-4xl font-heading tracking-widest text-blue-400">CONNECT PROJECT</h1>
+          <div className="space-y-4">
+            <p className="text-slate-400 leading-relaxed text-sm">
+              To use your new <strong className="text-blue-300">winter-olympics</strong> project and avoid shared quota errors, we need to link your credentials.
+            </p>
+            <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-xl text-[11px] text-slate-300 text-left space-y-2">
+              <p>1. Click the button below.</p>
+              <p>2. Select the key associated with your project.</p>
+              <p>3. Start generating high-pro Olympic action!</p>
+            </div>
+          </div>
           <div className="space-y-4">
             <button 
               onClick={handleSelectKey}
-              className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-xl"
+              className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-xl active:scale-95"
             >
               SELECT API KEY
             </button>
@@ -302,9 +317,9 @@ const App: React.FC = () => {
               href="https://ai.google.dev/gemini-api/docs/billing" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="block text-xs text-blue-400 hover:text-blue-300 underline underline-offset-4 tracking-widest font-bold"
+              className="block text-[10px] text-blue-400/60 hover:text-blue-300 underline underline-offset-4 tracking-[0.2em] font-bold uppercase"
             >
-              BILLING DOCUMENTATION
+              Billing Documentation
             </a>
           </div>
         </div>
@@ -343,7 +358,7 @@ const App: React.FC = () => {
             {isGenerating ? (
               <div className="space-y-6 py-8">
                 <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="text-blue-300 font-heading text-2xl tracking-wide">Developing Action Photo (1K PRO)...</p>
+                <p className="text-blue-300 font-heading text-2xl tracking-wide">Developing 1K Pro Action Shot...</p>
               </div>
             ) : (
               <>
@@ -482,7 +497,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="py-8 text-[9px] tracking-[0.4em] text-slate-600 uppercase font-bold text-center">
-        Pro Image Engine (Gemini 3) • Personal Quota Active • Smart Mic Fallback ON
+        Pro Image Engine (Gemini 3) • Personal Project Credentialed • Smart Mic Fallback ON
       </footer>
     </div>
   );
