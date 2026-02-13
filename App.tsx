@@ -6,7 +6,7 @@ import { WINTER_SPORTS_LIST } from './constants';
 import PlayerSetup from './components/PlayerSetup';
 import HistoryGallery from './components/HistoryGallery';
 import ImageDisplay from './components/ImageDisplay';
-import { verifySportAnswer, getGameIntroMessage, generateSportImage } from './services/geminiService';
+import { verifySportAnswer, getGameIntroMessage, generateSportImage, VerificationResult } from './services/geminiService';
 
 // Audio Encoding for Live API
 function encode(bytes: Uint8Array) {
@@ -37,14 +37,13 @@ const App: React.FC = () => {
   const [guess, setGuess] = useState('');
   const [typedFeedback, setTypedFeedback] = useState('');
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<VerificationResult | null>(null);
   const [introMessage, setIntroMessage] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isVoiceConnecting, setIsVoiceConnecting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
-  const [activeMicLabel, setActiveMicLabel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   const sessionRef = useRef<any>(null);
@@ -82,28 +81,8 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioDevices = devices.filter(d => d.kind === 'audioinput');
-      
-      let stream: MediaStream | null = null;
-      const internalMic = audioDevices.find(d => 
-        d.label.toLowerCase().includes('internal') || 
-        d.label.toLowerCase().includes('built-in')
-      );
-
-      try {
-        const constraints = internalMic 
-          ? { audio: { deviceId: { exact: internalMic.deviceId } } } 
-          : { audio: true };
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (e) {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!stream) throw new Error("No microphone found.");
-
-      const audioTrack = stream.getAudioTracks()[0];
-      setActiveMicLabel(audioTrack.label);
       streamRef.current = stream;
 
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -216,14 +195,16 @@ const App: React.FC = () => {
     try {
       const finalGuess = guess || typedFeedback;
       const result = await verifySportAnswer(finalGuess, currentSport);
-      setFeedback({ isCorrect: result.isCorrect, text: result.feedback });
+      setFeedback(result);
       
       setHistory(prev => [...prev, {
         sport: currentSport,
         imageUrl: imageUrl || '',
         playerName: players[currentPlayerIndex].name,
         playerGuess: finalGuess,
-        isCorrect: result.isCorrect
+        isCorrect: result.isCorrect,
+        detailedDescription: result.detailedDescription,
+        videoUrl: result.videoUrl
       }]);
 
       if (result.isCorrect) setPlayers(prev => {
@@ -370,7 +351,6 @@ const App: React.FC = () => {
                   Verify
                 </button>
               </div>
-              <p className="text-[10px] text-center text-slate-500 tracking-[0.3em] font-black uppercase pt-4 opacity-50">SAY "SUBMIT" TO AUTO-FINISH YOUR TURN</p>
             </div>
           </div>
         )}
@@ -378,25 +358,43 @@ const App: React.FC = () => {
         {gameState === GameState.VERIFYING && (
           <div className="text-center p-20 glass-panel rounded-3xl animate-frost shadow-2xl border-white/5">
              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-8 shadow-lg shadow-blue-500/20"></div>
-             <h2 className="text-3xl font-heading text-blue-300 tracking-[0.2em] uppercase">Consulting the Podium...</h2>
+             <h2 className="text-3xl font-heading text-blue-300 tracking-[0.2em] uppercase">Checking groundings...</h2>
           </div>
         )}
 
         {gameState === GameState.ROUND_RESULTS && feedback && (
-          <div className="text-center glass-panel p-12 rounded-3xl animate-frost shadow-2xl border-white/5">
-            <div className="text-8xl mb-8 drop-shadow-2xl">{feedback.isCorrect ? '🥇' : '❄️'}</div>
-            <h2 className={`text-5xl font-heading mb-2 uppercase tracking-tight ${feedback.isCorrect ? 'text-green-400' : 'text-slate-300'}`}>
+          <div className="text-center glass-panel p-10 rounded-3xl animate-frost shadow-2xl border-white/5 overflow-hidden">
+            <div className="text-7xl mb-6 drop-shadow-2xl">{feedback.isCorrect ? '🥇' : '❄️'}</div>
+            <h2 className={`text-4xl font-heading mb-2 uppercase tracking-tight ${feedback.isCorrect ? 'text-green-400' : 'text-slate-300'}`}>
               {feedback.isCorrect ? 'Point Secured!' : 'Ice Cold!'}
             </h2>
-            <p className="text-2xl font-black mb-8 text-white tracking-widest uppercase opacity-90">Target: {currentSport}</p>
-            <div className="bg-slate-900/80 p-8 rounded-2xl border border-white/5 text-slate-300 italic mb-10 leading-relaxed shadow-inner max-w-lg mx-auto">
-              {feedback.text}
+            <p className="text-xl font-black mb-6 text-white tracking-widest uppercase opacity-90">Answer: {currentSport}</p>
+            
+            <div className="bg-slate-900/60 p-6 rounded-2xl border border-white/5 text-slate-300 mb-8 max-w-xl mx-auto space-y-4">
+               <p className="italic font-bold text-blue-300">"{feedback.feedback}"</p>
+               <div className="h-px bg-white/5 w-full"></div>
+               <p className="text-sm leading-relaxed text-left text-slate-400">
+                  {feedback.detailedDescription}
+               </p>
+               
+               {feedback.videoUrl && (
+                 <a 
+                   href={feedback.videoUrl} 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="flex items-center justify-center gap-3 w-full py-4 bg-red-600/20 hover:bg-red-600/40 border border-red-600/30 rounded-xl transition-all group mt-4"
+                 >
+                   <svg className="w-6 h-6 text-red-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+                   <span className="font-bold text-sm tracking-wider uppercase text-red-100">Watch Sport Highlights</span>
+                 </a>
+               )}
             </div>
+
             <button 
               onClick={nextTurn} 
               className="px-14 py-5 bg-blue-600 rounded-2xl font-black tracking-widest uppercase text-xl hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 active:scale-95"
             >
-              Next Competitor
+              Continue
             </button>
           </div>
         )}
@@ -426,7 +424,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="py-8 text-[10px] tracking-[0.5em] text-slate-600 uppercase font-black text-center opacity-40">
-        AI Project Active • Gemini Flash Engine • Pro-Level Visuals
+        AI Search Grounding Enabled • Sport-Sync 2024 • Pro Visuals
       </footer>
     </div>
   );

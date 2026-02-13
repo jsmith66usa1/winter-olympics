@@ -17,6 +17,8 @@ export interface HistoryItem {
   playerName: string;
   playerGuess: string;
   isCorrect: boolean;
+  detailedDescription?: string;
+  videoUrl?: string;
 }
 
 export enum GameState {
