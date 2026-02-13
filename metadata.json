@@ -1,0 +1,8 @@
+{
+  "name": "Winter Games: Sport Spotter",
+  "description": "A competitive multiplayer game where players identify Winter Olympic sports from short video clips within 30 seconds. Features turn-based play and AI-powered answer verification.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
