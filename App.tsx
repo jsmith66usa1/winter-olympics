@@ -8,13 +8,14 @@ import HistoryGallery from './components/HistoryGallery';
 import ImageDisplay from './components/ImageDisplay';
 import { verifySportAnswer, getGameIntroMessage, generateSportImage } from './services/geminiService';
 
-// Audio Helpers for Live API
+// Audio Encoding for Live API
 function encode(bytes: Uint8Array) {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
 
+// Audio Blob Creation for Live API
 function createBlob(data: Float32Array): { data: string; mimeType: string } {
   const int16 = new Int16Array(data.length);
   for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
@@ -25,7 +26,6 @@ function createBlob(data: Float32Array): { data: string; mimeType: string } {
 }
 
 const App: React.FC = () => {
-  const [hasKey, setHasKey] = useState<boolean>(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [gameState, setGameState] = useState<GameState>(GameState.LOBBY);
@@ -51,29 +51,6 @@ const App: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    checkApiKey();
-  }, []);
-
-  const checkApiKey = async () => {
-    try {
-      const selected = await (window as any).aistudio.hasSelectedApiKey();
-      setHasKey(selected);
-    } catch (e) {
-      console.error("Failed to check API key status", e);
-    }
-  };
-
-  const handleSelectKey = async () => {
-    try {
-      await (window as any).aistudio.openSelectKey();
-      // Per instructions, assume success after opening to avoid race conditions
-      setHasKey(true);
-    } catch (e) {
-      console.error("Failed to open key selection dialog", e);
-    }
-  };
 
   const animateTyping = (text: string) => {
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
@@ -109,7 +86,6 @@ const App: React.FC = () => {
       const audioDevices = devices.filter(d => d.kind === 'audioinput');
       
       let stream: MediaStream | null = null;
-      
       const internalMic = audioDevices.find(d => 
         d.label.toLowerCase().includes('internal') || 
         d.label.toLowerCase().includes('built-in')
@@ -124,7 +100,7 @@ const App: React.FC = () => {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
-      if (!stream) throw new Error("No usable microphone found.");
+      if (!stream) throw new Error("No microphone found.");
 
       const audioTrack = stream.getAudioTracks()[0];
       setActiveMicLabel(audioTrack.label);
@@ -171,7 +147,7 @@ const App: React.FC = () => {
               animateTyping(text);
               const lower = text.toLowerCase();
               if (lower.includes("submit") || lower.includes("check")) {
-                setLastVoiceCommand("JUDGING...");
+                setLastVoiceCommand("CHECKING...");
                 setTimeout(handleVerify, 800);
               } else {
                 setGuess(text);
@@ -189,7 +165,7 @@ const App: React.FC = () => {
       sessionRef.current = await sessionPromise;
     } catch (e: any) {
       setIsVoiceConnecting(false);
-      setError(`Hardware Error: ${e.message || "Mic access failed"}. Ensure 'Internal Microphone' is selected in Mac Settings.`);
+      setError(`Audio Error: ${e.message}.`);
     }
   };
 
@@ -221,14 +197,11 @@ const App: React.FC = () => {
       setTimer(30);
     } catch (err: any) {
       if (err.message?.includes("429") || err.message?.includes("quota")) {
-        setError("Personal Quota Exceeded. Please ensure your project has billing enabled.");
-      } else if (err.message?.includes("not found")) {
-        setHasKey(false);
-        setError("API key no longer valid. Please re-select your credentials.");
+        setError("The stadium is at capacity (Rate Limit). Please wait a moment and try again.");
       } else {
-        setError("Challenge Load Failed: The stadium is temporarily closed. Try again.");
+        setError("AI challenge generation failed. Let's try another event.");
       }
-      setGameState(GameState.ERROR);
+      setGameState(GameState.ROUND_START);
     } finally {
       setIsGenerating(false);
     }
@@ -290,43 +263,6 @@ const App: React.FC = () => {
     }
   };
 
-  if (!hasKey) {
-    return (
-      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-4">
-        <div className="max-w-md w-full glass-panel p-10 rounded-3xl text-center space-y-8 animate-frost border-white/5 shadow-2xl">
-          <div className="text-6xl animate-bounce">🎿</div>
-          <h1 className="text-4xl font-heading tracking-widest text-blue-400">CONNECT PROJECT</h1>
-          <div className="space-y-4">
-            <p className="text-slate-400 leading-relaxed text-sm">
-              To use your new <strong className="text-blue-300">winter-olympics</strong> project and avoid shared quota errors, we need to link your credentials.
-            </p>
-            <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-xl text-[11px] text-slate-300 text-left space-y-2">
-              <p>1. Click the button below.</p>
-              <p>2. Select the key associated with your project.</p>
-              <p>3. Start generating high-pro Olympic action!</p>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <button 
-              onClick={handleSelectKey}
-              className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-xl active:scale-95"
-            >
-              SELECT API KEY
-            </button>
-            <a 
-              href="https://ai.google.dev/gemini-api/docs/billing" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="block text-[10px] text-blue-400/60 hover:text-blue-300 underline underline-offset-4 tracking-[0.2em] font-bold uppercase"
-            >
-              Billing Documentation
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const currentPlayer = players[currentPlayerIndex];
 
   return (
@@ -344,9 +280,9 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <main className="w-full max-w-3xl flex-1 flex flex-col justify-center">
+      <main className="w-full max-w-3xl flex-1 flex flex-col justify-center pb-12">
         {error && (
-          <div className="bg-red-500/20 border border-red-500 p-4 rounded-2xl mb-6 animate-pulse text-center text-sm font-bold text-red-200">
+          <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl mb-6 animate-pulse text-center text-sm font-bold text-red-300 shadow-lg">
             {error}
           </div>
         )}
@@ -357,19 +293,19 @@ const App: React.FC = () => {
           <div className="text-center glass-panel p-12 rounded-3xl animate-frost border-white/5 shadow-2xl">
             {isGenerating ? (
               <div className="space-y-6 py-8">
-                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="text-blue-300 font-heading text-2xl tracking-wide">Developing 1K Pro Action Shot...</p>
+                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-blue-500/20"></div>
+                <p className="text-blue-300 font-heading text-2xl tracking-widest uppercase animate-pulse">Generating Action Shot...</p>
               </div>
             ) : (
               <>
-                <div className="text-blue-400 text-xs font-bold uppercase tracking-[0.3em] mb-4">Round {currentRound} / 3</div>
+                <div className="text-blue-400 text-xs font-bold uppercase tracking-[0.4em] mb-4 bg-blue-500/10 inline-block px-4 py-1 rounded-full border border-blue-500/20">Round {currentRound} / 3</div>
                 <h2 className="text-5xl md:text-6xl font-heading mb-4 text-white uppercase tracking-tight">{currentPlayer?.name}'s Event</h2>
-                <p className="text-slate-400 mb-10 italic max-w-md mx-auto">"{introMessage}"</p>
+                <p className="text-slate-400 mb-10 italic max-w-md mx-auto leading-relaxed">"{introMessage}"</p>
                 <button 
                   onClick={startTurn} 
-                  className="px-12 py-5 bg-white text-black font-bold rounded-2xl hover:bg-blue-50 transition-all transform hover:scale-105 active:scale-95 shadow-xl"
+                  className="px-12 py-5 bg-white text-black font-black rounded-2xl hover:bg-blue-50 transition-all transform hover:scale-105 active:scale-95 shadow-2xl tracking-widest uppercase"
                 >
-                  START CHALLENGE
+                  Enter Event
                 </button>
               </>
             )}
@@ -378,16 +314,16 @@ const App: React.FC = () => {
 
         {gameState === GameState.PLAYING && imageUrl && (
           <div className="space-y-6 animate-frost">
-            <div className="relative">
+            <div className="relative group">
               <ImageDisplay imageUrl={imageUrl} />
-              <div className="absolute top-4 right-4 text-4xl font-heading text-white bg-blue-600/80 px-5 py-2 rounded-2xl backdrop-blur-md shadow-xl border border-blue-400/30">
+              <div className="absolute top-4 right-4 text-4xl font-heading text-white bg-blue-600 px-5 py-2 rounded-2xl backdrop-blur-md shadow-2xl border border-white/20 transition-transform group-hover:scale-110">
                 {timer}S
               </div>
             </div>
 
             <div className="relative space-y-4">
               {lastVoiceCommand && (
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-blue-400 font-bold text-xs animate-bounce tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-blue-400 font-black text-[10px] animate-bounce tracking-[0.3em] bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 shadow-xl uppercase">
                   {lastVoiceCommand}
                 </div>
               )}
@@ -397,13 +333,13 @@ const App: React.FC = () => {
                   <button 
                     onClick={toggleVoice}
                     disabled={isVoiceConnecting}
-                    className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-lg ${isVoiceActive ? 'bg-red-500 animate-pulse shadow-red-500/30' : 'bg-slate-800 hover:bg-slate-700'} ${isVoiceConnecting ? 'opacity-50 grayscale' : ''}`}
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-xl ${isVoiceActive ? 'bg-red-500 animate-pulse shadow-red-500/40 scale-105' : 'bg-slate-800 hover:bg-slate-700'} ${isVoiceConnecting ? 'opacity-40 grayscale pointer-events-none' : ''}`}
                   >
                     <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                   </button>
                   {isVoiceActive && (
-                    <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                      <div className="h-full bg-blue-400 transition-all duration-75" style={{ width: `${Math.min(100, (micLevel / 128) * 100)}%` }}></div>
+                    <div className="w-16 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-white/5">
+                      <div className="h-full bg-blue-400 transition-all duration-75 shadow-lg shadow-blue-500/50" style={{ width: `${Math.min(100, (micLevel / 128) * 100)}%` }}></div>
                     </div>
                   )}
                 </div>
@@ -414,8 +350,8 @@ const App: React.FC = () => {
                     autoFocus
                     value={typedFeedback || guess}
                     onChange={(e) => setGuess(e.target.value)}
-                    placeholder={isVoiceActive ? "Transcribing..." : "Click mic to speak answer"}
-                    className={`w-full h-16 bg-slate-900 border-2 rounded-2xl px-6 text-xl transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${isVoiceActive ? 'border-blue-500 italic' : 'border-slate-800 focus:border-blue-500/50'}`}
+                    placeholder={isVoiceActive ? "Transcribing Voice..." : "Click mic to speak answer"}
+                    className={`w-full h-16 bg-slate-900 border-2 rounded-2xl px-6 text-xl transition-all outline-none shadow-inner focus:ring-4 focus:ring-blue-500/5 ${isVoiceActive ? 'border-blue-500 italic text-blue-100' : 'border-slate-800 focus:border-blue-500/50'}`}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                   />
                   {isVoiceActive && (
@@ -425,79 +361,72 @@ const App: React.FC = () => {
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
                     </div>
                   )}
-                  {activeMicLabel && isVoiceActive && (
-                    <div className="absolute -bottom-5 left-1 text-[9px] uppercase tracking-widest text-slate-500 font-bold">
-                      <span className="text-blue-500/60">SOURCE:</span> {activeMicLabel}
-                    </div>
-                  )}
                 </div>
 
                 <button 
                   onClick={handleVerify} 
-                  className="px-8 h-16 bg-blue-600 rounded-2xl font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-xl shadow-blue-600/20"
+                  className="px-8 h-16 bg-blue-600 rounded-2xl font-black tracking-widest uppercase hover:bg-blue-500 active:scale-95 transition-all shadow-xl shadow-blue-600/30"
                 >
-                  SUBMIT
+                  Verify
                 </button>
               </div>
-              <p className="text-[10px] text-center text-slate-500 tracking-[0.2em] font-bold uppercase pt-2">SAY "SUBMIT" TO JUDGE YOUR ANSWER AUTOMATICALLY</p>
+              <p className="text-[10px] text-center text-slate-500 tracking-[0.3em] font-black uppercase pt-4 opacity-50">SAY "SUBMIT" TO AUTO-FINISH YOUR TURN</p>
             </div>
           </div>
         )}
 
         {gameState === GameState.VERIFYING && (
           <div className="text-center p-20 glass-panel rounded-3xl animate-frost shadow-2xl border-white/5">
-             <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-             <h2 className="text-2xl font-bold text-blue-300 tracking-widest uppercase">Consulting the Judges...</h2>
+             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-8 shadow-lg shadow-blue-500/20"></div>
+             <h2 className="text-3xl font-heading text-blue-300 tracking-[0.2em] uppercase">Consulting the Podium...</h2>
           </div>
         )}
 
         {gameState === GameState.ROUND_RESULTS && feedback && (
           <div className="text-center glass-panel p-12 rounded-3xl animate-frost shadow-2xl border-white/5">
-            <div className="text-8xl mb-6">{feedback.isCorrect ? '🥇' : '❄️'}</div>
-            <h2 className={`text-5xl font-heading mb-2 ${feedback.isCorrect ? 'text-green-400' : 'text-slate-300'}`}>
-              {feedback.isCorrect ? 'POINT SECURED!' : 'ICE COLD!'}
+            <div className="text-8xl mb-8 drop-shadow-2xl">{feedback.isCorrect ? '🥇' : '❄️'}</div>
+            <h2 className={`text-5xl font-heading mb-2 uppercase tracking-tight ${feedback.isCorrect ? 'text-green-400' : 'text-slate-300'}`}>
+              {feedback.isCorrect ? 'Point Secured!' : 'Ice Cold!'}
             </h2>
-            <p className="text-2xl font-bold mb-6 text-white tracking-wide">It was {currentSport}</p>
-            <p className="bg-slate-900/80 p-8 rounded-2xl border border-slate-800 text-slate-300 italic mb-10 leading-relaxed shadow-inner">
+            <p className="text-2xl font-black mb-8 text-white tracking-widest uppercase opacity-90">Target: {currentSport}</p>
+            <div className="bg-slate-900/80 p-8 rounded-2xl border border-white/5 text-slate-300 italic mb-10 leading-relaxed shadow-inner max-w-lg mx-auto">
               {feedback.text}
-            </p>
+            </div>
             <button 
               onClick={nextTurn} 
-              className="px-14 py-5 bg-blue-600 rounded-2xl font-bold text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/30"
+              className="px-14 py-5 bg-blue-600 rounded-2xl font-black tracking-widest uppercase text-xl hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 active:scale-95"
             >
-              CONTINUE COMPETITION
+              Next Competitor
             </button>
           </div>
         )}
 
         {gameState === GameState.GAME_OVER && (
           <div className="text-center glass-panel p-12 rounded-3xl animate-frost shadow-2xl border-white/5">
-            <h2 className="text-6xl font-heading mb-10 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">PODIUM RESULTS</h2>
-            <div className="space-y-4 mb-12">
+            <h2 className="text-6xl font-heading mb-12 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 uppercase tracking-tighter">Podium Results</h2>
+            <div className="space-y-4 mb-14 max-w-md mx-auto">
               {[...players].sort((a,b) => b.score - a.score).map((p,i) => (
-                <div key={p.id} className={`flex justify-between items-center p-6 rounded-2xl border ${i === 0 ? 'bg-blue-500/10 border-blue-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
-                  <div className="flex items-center gap-4">
-                    <span className={`text-2xl font-heading ${i === 0 ? 'text-yellow-400' : 'text-slate-500'}`}>#{i+1}</span>
-                    <span className="font-bold text-xl tracking-wide">{p.name}</span>
+                <div key={p.id} className={`flex justify-between items-center p-6 rounded-2xl border transition-all ${i === 0 ? 'bg-blue-500/10 border-blue-500/40 shadow-lg scale-105' : 'bg-slate-900/50 border-white/5'}`}>
+                  <div className="flex items-center gap-5">
+                    <span className={`text-3xl font-heading ${i === 0 ? 'text-yellow-400' : 'text-slate-600'}`}>#{i+1}</span>
+                    <span className="font-black text-xl tracking-wider uppercase">{p.name}</span>
                   </div>
-                  <span className="font-heading text-3xl">{p.score} <span className="text-xs opacity-40">PTS</span></span>
+                  <span className="font-heading text-4xl text-blue-400">{p.score} <span className="text-xs opacity-40 text-white">PTS</span></span>
                 </div>
               ))}
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-               <button onClick={() => window.location.reload()} className="px-12 py-5 bg-white text-black font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-xl">
-                 NEW MATCH
-               </button>
-            </div>
-            <div className="mt-16 text-left">
+            <button onClick={() => window.location.reload()} className="px-14 py-5 bg-white text-black font-black rounded-2xl hover:bg-blue-50 transition-all shadow-2xl uppercase tracking-widest active:scale-95">
+              New Tournament
+            </button>
+            <div className="mt-20">
               <HistoryGallery history={history} />
             </div>
           </div>
         )}
       </main>
 
-      <footer className="py-8 text-[9px] tracking-[0.4em] text-slate-600 uppercase font-bold text-center">
-        Pro Image Engine (Gemini 3) • Personal Project Credentialed • Smart Mic Fallback ON
+      <footer className="py-8 text-[10px] tracking-[0.5em] text-slate-600 uppercase font-black text-center opacity-40">
+        AI Project Active • Gemini Flash Engine • Pro-Level Visuals
       </footer>
     </div>
   );

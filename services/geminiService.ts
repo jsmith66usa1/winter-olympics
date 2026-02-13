@@ -2,25 +2,25 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * Generates a high-quality action photograph using the Gemini 3 Pro Image model.
- * Initializing inside the function to ensure the latest API key is used.
+ * Generates an action photograph using the Gemini 2.5 Flash Image model.
+ * This model follows standard quota rules and doesn't require the mandatory 
+ * key selection UI, making it better for a public "shared" experience.
  */
 export async function generateSportImage(sport: string): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `A cinematic, hyper-realistic professional photograph of a Winter Olympic athlete performing ${sport}. 
-  Extreme action shot, snow crystals spray, dramatic lens flare, authentic Olympic gear. 
-  High-end sports magazine quality, sharp focus. No text, no logos.`;
+  const prompt = `A cinematic action photograph of a Winter Olympic athlete performing ${sport}. 
+  Professional sports photography, snow spray, high speed, authentic gear. 
+  Sharp focus, realistic lighting. No text, no logos.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image',
       contents: {
         parts: [{ text: prompt }],
       },
       config: {
         imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: "1K"
+          aspectRatio: "16:9"
         }
       }
     });
