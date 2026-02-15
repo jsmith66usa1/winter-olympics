@@ -35,7 +35,6 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [timer, setTimer] = useState(30);
   const [guess, setGuess] = useState('');
-  const [typedFeedback, setTypedFeedback] = useState('');
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<VerificationResult | null>(null);
   const [introMessage, setIntroMessage] = useState<string>('');
@@ -51,18 +50,19 @@ const App: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
 
-  const animateTyping = (text: string) => {
+  // Animate voice transcription for visual flair while still allowing it to be edited
+  const animateTranscription = (text: string) => {
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
     let i = 0;
-    setTypedFeedback('');
+    setGuess('');
     typingIntervalRef.current = window.setInterval(() => {
       if (i < text.length) {
-        setTypedFeedback(prev => prev + text.charAt(i));
+        setGuess(prev => prev + text.charAt(i));
         i++;
       } else {
         clearInterval(typingIntervalRef.current!);
       }
-    }, 30);
+    }, 20);
   };
 
   const startNewGame = (p: Player[]) => {
@@ -123,13 +123,14 @@ const App: React.FC = () => {
             if (msg.serverContent?.inputTranscription) {
               const text = msg.serverContent.inputTranscription.text;
               if (!text) return;
-              animateTyping(text);
+              
               const lower = text.toLowerCase();
               if (lower.includes("submit") || lower.includes("check")) {
                 setLastVoiceCommand("CHECKING...");
                 setTimeout(handleVerify, 800);
               } else {
-                setGuess(text);
+                // We use the animation for the initial incoming voice but allow immediate editing thereafter
+                animateTranscription(text);
               }
             }
           },
@@ -164,7 +165,6 @@ const App: React.FC = () => {
     setIsGenerating(true);
     setError(null);
     setGuess('');
-    setTypedFeedback('');
     setImageUrl(null);
     const sport = WINTER_SPORTS_LIST[Math.floor(Math.random() * WINTER_SPORTS_LIST.length)];
     setCurrentSport(sport);
@@ -188,12 +188,14 @@ const App: React.FC = () => {
 
   const handleVerify = async () => {
     if (isVerifying || gameState !== GameState.PLAYING) return;
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    
     setIsVerifying(true);
     setGameState(GameState.VERIFYING);
     disconnectVoice();
 
     try {
-      const finalGuess = guess || typedFeedback;
+      const finalGuess = guess;
       const result = await verifySportAnswer(finalGuess, currentSport);
       setFeedback(result);
       
@@ -245,6 +247,12 @@ const App: React.FC = () => {
   };
 
   const currentPlayer = players[currentPlayerIndex];
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // If the user starts typing manually, stop any active voice animation
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    setGuess(e.target.value);
+  };
 
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center p-4">
@@ -315,6 +323,7 @@ const App: React.FC = () => {
                     onClick={toggleVoice}
                     disabled={isVoiceConnecting}
                     className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-xl ${isVoiceActive ? 'bg-red-500 animate-pulse shadow-red-500/40 scale-105' : 'bg-slate-800 hover:bg-slate-700'} ${isVoiceConnecting ? 'opacity-40 grayscale pointer-events-none' : ''}`}
+                    title="Speak Guess"
                   >
                     <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                   </button>
@@ -329,9 +338,9 @@ const App: React.FC = () => {
                   <input 
                     type="text"
                     autoFocus
-                    value={typedFeedback || guess}
-                    onChange={(e) => setGuess(e.target.value)}
-                    placeholder={isVoiceActive ? "Transcribing Voice..." : "Click mic to speak answer"}
+                    value={guess}
+                    onChange={handleInputChange}
+                    placeholder={isVoiceActive ? "Listening for your guess..." : "Type or speak your answer"}
                     className={`w-full h-16 bg-slate-900 border-2 rounded-2xl px-6 text-xl transition-all outline-none shadow-inner focus:ring-4 focus:ring-blue-500/5 ${isVoiceActive ? 'border-blue-500 italic text-blue-100' : 'border-slate-800 focus:border-blue-500/50'}`}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                   />
@@ -342,6 +351,9 @@ const App: React.FC = () => {
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
                     </div>
                   )}
+                  <div className="mt-2 text-[10px] text-slate-500 uppercase tracking-widest font-bold px-2">
+                    {isVoiceActive ? "Voice transcription is editable" : "Use keyboard to correct your guess if needed"}
+                  </div>
                 </div>
 
                 <button 
