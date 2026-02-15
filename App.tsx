@@ -358,7 +358,7 @@ const App: React.FC = () => {
         {gameState === GameState.VERIFYING && (
           <div className="text-center p-20 glass-panel rounded-3xl animate-frost shadow-2xl border-white/5">
              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-8 shadow-lg shadow-blue-500/20"></div>
-             <h2 className="text-3xl font-heading text-blue-300 tracking-[0.2em] uppercase">Checking groundings...</h2>
+             <h2 className="text-3xl font-heading text-blue-300 tracking-[0.2em] uppercase">Checking Groundings...</h2>
           </div>
         )}
 
@@ -378,16 +378,19 @@ const App: React.FC = () => {
                </p>
                
                {feedback.videoUrl && (
-                 <div className="mt-4">
+                 <div className="mt-6">
                    <a 
                      href={feedback.videoUrl} 
                      target="_blank" 
                      rel="noopener noreferrer"
-                     className="flex items-center justify-center gap-3 w-full py-4 bg-red-600 hover:bg-red-500 border border-red-400/30 rounded-xl transition-all group shadow-xl shadow-red-600/20"
+                     className="flex items-center justify-center gap-3 w-full py-4 bg-[#FF0000] hover:bg-[#CC0000] border border-white/10 rounded-xl transition-all group shadow-xl shadow-red-600/20 transform hover:-translate-y-0.5 active:scale-95"
                    >
-                     <svg className="w-6 h-6 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
-                     <span className="font-black text-sm tracking-wider uppercase text-white">Watch Video Highlights</span>
+                     <svg className="w-7 h-7 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
+                     </svg>
+                     <span className="font-black text-sm tracking-wider uppercase text-white drop-shadow-md">Watch Official Highlights</span>
                    </a>
+                   <p className="mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest opacity-60">Redirects to YouTube.com</p>
                  </div>
                )}
             </div>
